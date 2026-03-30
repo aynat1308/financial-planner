@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Independence Planner</title>
+  <style>
+    #loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading Financial Planner...</div>
+  <div id="root"></div>
+  
+  <!-- Load libraries first -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.10.3/dist/Recharts.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Wait for libraries to load, then load and run the app -->
+  <script>
+    function checkLibraries() {
+      if (typeof React !== 'undefined' && 
+          typeof ReactDOM !== 'undefined' && 
+          typeof Recharts !== 'undefined' &&
+          typeof window.jspdf !== 'undefined' &&
+          typeof window.XLSX !== 'undefined') {
+        document.getElementById('loading').style.display = 'none';
+        loadApp();
+      } else {
+        setTimeout(checkLibraries, 100);
+      }
+    }
+    
+    function loadApp() {
+      const script = document.createElement('script');
+      script.src = 'app.js';
+      document.body.appendChild(script);
+    }
+    
+    checkLibraries();
+  </script>
+</body>
+</html>
