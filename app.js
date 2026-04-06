@@ -1645,30 +1645,47 @@ function FinancialPlanner() {
           windowWidth: contentEl.scrollWidth,
           windowHeight: contentEl.scrollHeight,
           onclone: (clonedDoc) => {
-            // Replace all inputs/textareas with visible text spans so values render correctly
+            // Replace all inputs/textareas with visible centered divs
             clonedDoc.querySelectorAll('input, textarea').forEach(input => {
-              const span = clonedDoc.createElement('div');
-              span.textContent = input.value;
+              const div = clonedDoc.createElement('div');
+              div.textContent = input.value;
               const cs = window.getComputedStyle(input);
-              span.style.fontFamily = cs.fontFamily;
-              span.style.fontSize = cs.fontSize;
-              span.style.fontWeight = cs.fontWeight;
-              span.style.color = cs.color;
-              span.style.textAlign = cs.textAlign;
-              span.style.padding = cs.padding;
-              span.style.width = cs.width;
-              span.style.minWidth = cs.minWidth;
-              span.style.border = cs.border;
-              span.style.borderRadius = cs.borderRadius;
-              span.style.background = cs.background;
-              span.style.display = 'flex';
-              span.style.alignItems = 'center';
-              span.style.justifyContent = cs.textAlign === 'right' ? 'flex-end' : 'flex-start';
-              span.style.height = cs.height;
-              span.style.boxSizing = 'border-box';
-              span.style.overflow = 'visible';
-              span.style.whiteSpace = 'nowrap';
-              input.parentNode.replaceChild(span, input);
+              div.style.fontFamily = cs.fontFamily;
+              div.style.fontSize = cs.fontSize;
+              div.style.fontWeight = cs.fontWeight;
+              div.style.color = cs.color;
+              div.style.padding = cs.padding;
+              div.style.width = cs.width;
+              div.style.minWidth = cs.minWidth;
+              div.style.border = cs.border;
+              div.style.borderRadius = cs.borderRadius;
+              div.style.background = cs.background;
+              div.style.height = cs.height;
+              div.style.boxSizing = 'border-box';
+              div.style.overflow = 'visible';
+              div.style.whiteSpace = 'nowrap';
+              // Center both axes
+              div.style.display = 'flex';
+              div.style.alignItems = 'center';
+              div.style.justifyContent = 'center';
+              div.style.textAlign = 'center';
+              input.parentNode.replaceChild(div, input);
+            });
+
+            // Fix Recharts legend item alignment
+            clonedDoc.querySelectorAll('.recharts-legend-item').forEach(item => {
+              item.style.display = 'inline-flex';
+              item.style.alignItems = 'center';
+              item.style.gap = '4px';
+              item.style.marginRight = '12px';
+            });
+            clonedDoc.querySelectorAll('.recharts-legend-item-text').forEach(text => {
+              text.style.verticalAlign = 'middle';
+              text.style.lineHeight = '1';
+            });
+            clonedDoc.querySelectorAll('.recharts-surface').forEach(svg => {
+              svg.style.verticalAlign = 'middle';
+              svg.style.flexShrink = '0';
             });
           },
         });
