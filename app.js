@@ -47,7 +47,7 @@ const calculateLoanPrincipal = (payment, annualRate, months) => {
   return Math.round(principal);
 };
 
-export default function FinancialPlanner() {
+function FinancialPlanner() {
   // Load saved data from localStorage
   const savedData = loadFromStorage();
   
