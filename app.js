@@ -3,7 +3,6 @@ const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsiv
 const { jsPDF } = window.jspdf;
 const XLSX = window.XLSX;
 
-
 // Note: These libraries will be imported via CDN in the HTML or need to be installed:
 // npm install jspdf jspdf-autotable html2canvas xlsx
 
