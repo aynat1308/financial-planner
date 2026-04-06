@@ -1644,6 +1644,33 @@ function FinancialPlanner() {
           height: contentEl.scrollHeight,
           windowWidth: contentEl.scrollWidth,
           windowHeight: contentEl.scrollHeight,
+          onclone: (clonedDoc) => {
+            // Replace all inputs/textareas with visible text spans so values render correctly
+            clonedDoc.querySelectorAll('input, textarea').forEach(input => {
+              const span = clonedDoc.createElement('div');
+              span.textContent = input.value;
+              const cs = window.getComputedStyle(input);
+              span.style.fontFamily = cs.fontFamily;
+              span.style.fontSize = cs.fontSize;
+              span.style.fontWeight = cs.fontWeight;
+              span.style.color = cs.color;
+              span.style.textAlign = cs.textAlign;
+              span.style.padding = cs.padding;
+              span.style.width = cs.width;
+              span.style.minWidth = cs.minWidth;
+              span.style.border = cs.border;
+              span.style.borderRadius = cs.borderRadius;
+              span.style.background = cs.background;
+              span.style.display = 'flex';
+              span.style.alignItems = 'center';
+              span.style.justifyContent = cs.textAlign === 'right' ? 'flex-end' : 'flex-start';
+              span.style.height = cs.height;
+              span.style.boxSizing = 'border-box';
+              span.style.overflow = 'visible';
+              span.style.whiteSpace = 'nowrap';
+              input.parentNode.replaceChild(span, input);
+            });
+          },
         });
 
         const pxPerMm = canvas.width / contentWidth;
