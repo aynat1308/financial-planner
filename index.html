@@ -20,6 +20,7 @@
   <!-- Export libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -1635,7 +1636,75 @@ function FinancialPlanner() {
   const exportToPDF = async (selections) => {
     try {
       setIsExporting(true);
-      
+      setShowExportPopup(false);
+
+      const originalView = view;
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 8;
+      const contentWidth = pageWidth - margin * 2;
+
+      const sectionsToExport = [];
+      if (selections.dashboard) sectionsToExport.push('dashboard');
+      if (selections.expenses) sectionsToExport.push('expenses');
+      if (selections.incomes) sectionsToExport.push('incomes');
+      if (selections.assets) sectionsToExport.push('assets');
+      if (selections.debts) sectionsToExport.push('debts');
+
+      let firstPage = true;
+
+      for (const sectionView of sectionsToExport) {
+        setView(sectionView);
+        // Wait for React render + Recharts SVG paint
+        await new Promise(resolve => setTimeout(resolve, 900));
+
+        const contentEl = document.getElementById('export-content');
+        if (!contentEl) continue;
+
+        const canvas = await html2canvas(contentEl, {
+          scale: 1.5,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#f9fafb',
+          width: contentEl.scrollWidth,
+          height: contentEl.scrollHeight,
+          windowWidth: contentEl.scrollWidth,
+          windowHeight: contentEl.scrollHeight,
+        });
+
+        const pxPerMm = canvas.width / contentWidth;
+        const pageHeightPx = (pageHeight - margin * 2) * pxPerMm;
+
+        let yOffset = 0;
+        while (yOffset < canvas.height) {
+          if (!firstPage) pdf.addPage();
+          firstPage = false;
+
+          const slicePx = Math.min(pageHeightPx, canvas.height - yOffset);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = slicePx;
+          sliceCanvas.getContext('2d').drawImage(
+            canvas, 0, yOffset, canvas.width, slicePx, 0, 0, canvas.width, slicePx
+          );
+
+          const sliceHeightMm = (slicePx / pxPerMm);
+          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentWidth, sliceHeightMm);
+          yOffset += pageHeightPx;
+        }
+      }
+
+      setView(originalView);
+      setIsExporting(false);
+      pdf.save(`financial-plan-${new Date().toISOString().split('T')[0]}.pdf`);
+
+    } catch (error) {
+      console.error('Export to PDF failed:', error);
+      // Fallback: HTML export
+      try {
       // Create HTML content for PDF-style report
       let htmlContent = `
 <!DOCTYPE html>
@@ -1783,12 +1852,13 @@ function FinancialPlanner() {
       
       setIsExporting(false);
       setShowExportPopup(false);
-    } catch (error) {
-      console.error('Export to HTML failed:', error);
-      alert('Failed to export to HTML. Please try again.');
+    } catch (innerError) {
+      console.error('Export to HTML failed:', innerError);
+      alert('Failed to export to PDF. Please try again.');
       setIsExporting(false);
     }
-  };
+  }
+};
 
   const handleExport = () => {
     if (exportFormat === 'pdf') {
@@ -3664,12 +3734,24 @@ function FinancialPlanner() {
           </div>
         </div>
 
-        {view === 'dashboard' && <DashboardView />}
-        {view === 'expenses' && <ExpensesView />}
-        {view === 'incomes' && <IncomesView />}
-        {view === 'assets' && <AssetsView />}
-        {view === 'debts' && <DebtsView />}
-        
+        <div id="export-content">
+          {view === 'dashboard' && <DashboardView />}
+          {view === 'expenses' && <ExpensesView />}
+          {view === 'incomes' && <IncomesView />}
+          {view === 'assets' && <AssetsView />}
+          {view === 'debts' && <DebtsView />}
+        </div>
+
+        {/* Loading overlay during export */}
+        {isExporting && (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}}>
+            <div style={{background:'white',padding:'2rem 3rem',borderRadius:'1rem',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+              <div style={{fontSize:'1.2rem',fontWeight:600,marginBottom:'0.5rem'}}>Exporting PDF…</div>
+              <div style={{color:'#666',fontSize:'0.9rem'}}>Capturing each section, please wait</div>
+            </div>
+          </div>
+        )}
+
         {/* Export Popup */}
         <ExportPopup />
       </div>
@@ -3679,6 +3761,6 @@ function FinancialPlanner() {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<FinancialPlanner />);
-  </script>
+    </script>
 </body>
 </html>
