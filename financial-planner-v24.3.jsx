@@ -1,8 +1,5 @@
-const { useState, useMemo, useEffect } = React;
-const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ComposedChart, BarChart, Bar, PieChart, Pie, Cell } = Recharts;
-const { jsPDF } = window.jspdf;
-const XLSX = window.XLSX;
-
+import React, { useState, useMemo, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ComposedChart, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 
 // Note: These libraries will be imported via CDN in the HTML or need to be installed:
 // npm install jspdf jspdf-autotable html2canvas xlsx
@@ -51,7 +48,7 @@ const calculateLoanPrincipal = (payment, annualRate, months) => {
   return Math.round(principal);
 };
 
-function FinancialPlanner() {
+export default function FinancialPlanner() {
   // Load saved data from localStorage
   const savedData = loadFromStorage();
   
@@ -3648,6 +3645,3 @@ function FinancialPlanner() {
     </div>
   );
 }
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<FinancialPlanner />);
