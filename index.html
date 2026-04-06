@@ -795,6 +795,7 @@ function FinancialPlanner() {
   }, [projectionData]);
 
   const formatCurrency = (value) => {
+    if (value === undefined || value === null || isNaN(value)) return '₪0';
     if (Math.abs(value) >= 1000000) {
       return `₪${(value / 1000000).toFixed(1)}M`;
     } else if (Math.abs(value) >= 1000) {
