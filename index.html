@@ -1663,28 +1663,51 @@ function FinancialPlanner() {
         const contentEl = document.getElementById('export-content');
         if (!contentEl) continue;
 
-        // Collect input positions from the real DOM before cloning
-        const contentRect = contentEl.getBoundingClientRect();
-        const inputData = [];
-        contentEl.querySelectorAll('input, textarea').forEach(input => {
-          const rect = input.getBoundingClientRect();
+        // Step 1: Replace inputs in the REAL DOM with styled divs (then restore after screenshot)
+        const inputs = Array.from(contentEl.querySelectorAll('input, textarea'));
+        const swaps = inputs.map(input => {
           const cs = window.getComputedStyle(input);
-          inputData.push({
-            value: input.value,
-            x: rect.left - contentRect.left,
-            y: rect.top - contentRect.top,
-            width: rect.width,
-            height: rect.height,
-            fontSize: cs.fontSize,
-            fontFamily: cs.fontFamily,
-            fontWeight: cs.fontWeight,
-            color: cs.color,
-            background: cs.backgroundColor,
-            border: cs.border,
-            borderRadius: cs.borderRadius,
-          });
+          const div = document.createElement('div');
+          div.textContent = input.value;
+          div.style.cssText = input.style.cssText;
+          div.style.display = 'flex';
+          div.style.alignItems = 'center';
+          div.style.justifyContent = 'center';
+          div.style.textAlign = 'center';
+          div.style.fontFamily = cs.fontFamily;
+          div.style.fontSize = cs.fontSize;
+          div.style.fontWeight = cs.fontWeight;
+          div.style.color = cs.color;
+          div.style.background = cs.backgroundColor;
+          div.style.border = cs.border;
+          div.style.borderRadius = cs.borderRadius;
+          div.style.width = cs.width;
+          div.style.height = cs.height;
+          div.style.minWidth = cs.minWidth;
+          div.style.padding = '0 4px';
+          div.style.boxSizing = 'border-box';
+          div.style.overflow = 'visible';
+          div.className = input.className;
+          input.parentNode.replaceChild(div, input);
+          return { div, input };
         });
 
+        // Step 2: Fix legend alignment in the real DOM temporarily
+        const legendStyle = document.createElement('style');
+        legendStyle.id = '__pdf-legend-fix';
+        legendStyle.textContent = `
+          .recharts-legend-item {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            margin-right: 12px !important;
+          }
+          .recharts-legend-item svg { vertical-align: middle !important; flex-shrink: 0 !important; }
+          .recharts-legend-item-text { vertical-align: middle !important; line-height: 1 !important; }
+        `;
+        document.head.appendChild(legendStyle);
+
+        // Step 3: Screenshot using real window dimensions so ResponsiveContainer renders correctly
         const canvas = await html2canvas(contentEl, {
           scale: 1.5,
           useCORS: true,
@@ -1693,68 +1716,15 @@ function FinancialPlanner() {
           backgroundColor: '#f9fafb',
           width: contentEl.scrollWidth,
           height: contentEl.scrollHeight,
-          windowWidth: contentEl.scrollWidth,
-          windowHeight: contentEl.scrollHeight,
-          onclone: (clonedDoc, clonedEl) => {
-            // Hide all inputs in cloned doc (they render poorly)
-            clonedDoc.querySelectorAll('input, textarea').forEach(el => {
-              el.style.opacity = '0';
-            });
-
-            // Add absolutely-positioned overlays using real DOM positions
-            clonedEl.style.position = 'relative';
-            inputData.forEach(data => {
-              const div = clonedDoc.createElement('div');
-              div.textContent = data.value;
-              div.style.position = 'absolute';
-              div.style.left = data.x + 'px';
-              div.style.top = data.y + 'px';
-              div.style.width = data.width + 'px';
-              div.style.height = data.height + 'px';
-              div.style.display = 'flex';
-              div.style.alignItems = 'center';
-              div.style.justifyContent = 'center';
-              div.style.textAlign = 'center';
-              div.style.fontSize = data.fontSize;
-              div.style.fontFamily = data.fontFamily;
-              div.style.fontWeight = data.fontWeight;
-              div.style.color = data.color;
-              div.style.background = data.background;
-              div.style.border = data.border;
-              div.style.borderRadius = data.borderRadius;
-              div.style.boxSizing = 'border-box';
-              div.style.zIndex = '100';
-              div.style.overflow = 'hidden';
-              clonedEl.appendChild(div);
-            });
-
-            // Fix Recharts legend alignment via injected CSS
-            const style = clonedDoc.createElement('style');
-            style.textContent = `
-              .recharts-default-legend { padding: 0 !important; }
-              .recharts-legend-item {
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 5px !important;
-                margin-right: 16px !important;
-                vertical-align: middle !important;
-              }
-              .recharts-legend-item svg {
-                display: inline-block !important;
-                vertical-align: middle !important;
-                flex-shrink: 0 !important;
-                margin-bottom: 1px !important;
-              }
-              .recharts-legend-item-text {
-                vertical-align: middle !important;
-                line-height: 1 !important;
-                position: relative !important;
-                top: 0 !important;
-              }
-            `;
-            clonedDoc.head.appendChild(style);
-          },
+          windowWidth: window.innerWidth,
+          windowHeight: window.innerHeight,
+          scrollX: 0,
+          scrollY: 0,
         });
+
+        // Step 4: Restore real DOM
+        swaps.forEach(({ div, input }) => div.parentNode.replaceChild(input, div));
+        document.getElementById('__pdf-legend-fix')?.remove();
 
         const pxPerMm = canvas.width / contentWidth;
         const pageHeightPx = (pageHeight - margin * 2) * pxPerMm;
