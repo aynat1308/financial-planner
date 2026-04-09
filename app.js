@@ -169,6 +169,8 @@ function FinancialPlanner() {
   });
   const [exportFormat, setExportFormat] = useState('pdf'); // 'pdf' (HTML) or 'excel' (CSV)
   const [isExporting, setIsExporting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printSelections, setPrintSelections] = useState(null);
 
   const toggleYearExpanded = (year) => {
     const newExpanded = new Set(expandedYears);
@@ -1605,282 +1607,15 @@ function FinancialPlanner() {
   };
 
   const exportToPDF = async (selections) => {
-    try {
-      setIsExporting(true);
-      setShowExportPopup(false);
-
-      const originalView = view;
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = 210;
-      const pageHeight = 297;
-      const margin = 8;
-      const contentWidth = pageWidth - margin * 2;
-
-      const sectionsToExport = [];
-      if (selections.dashboard) sectionsToExport.push('dashboard');
-      if (selections.expenses) sectionsToExport.push('expenses');
-      if (selections.incomes) sectionsToExport.push('incomes');
-      if (selections.assets) sectionsToExport.push('assets');
-      if (selections.debts) sectionsToExport.push('debts');
-
-      let firstPage = true;
-
-      for (const sectionView of sectionsToExport) {
-        setView(sectionView);
-        // Wait for React render + Recharts SVG paint
-        await new Promise(resolve => setTimeout(resolve, 900));
-
-        const contentEl = document.getElementById('export-content');
-        if (!contentEl) continue;
-
-        // Step 1: Replace inputs in the REAL DOM with styled divs (then restore after screenshot)
-        const inputs = Array.from(contentEl.querySelectorAll('input, textarea'));
-        const swaps = inputs.map(input => {
-          const cs = window.getComputedStyle(input);
-          const div = document.createElement('div');
-          div.textContent = input.value;
-          div.style.cssText = input.style.cssText;
-          div.style.display = 'flex';
-          div.style.alignItems = 'center';
-          div.style.justifyContent = 'center';
-          div.style.textAlign = 'center';
-          div.style.fontFamily = cs.fontFamily;
-          div.style.fontSize = cs.fontSize;
-          div.style.fontWeight = cs.fontWeight;
-          div.style.color = cs.color;
-          div.style.background = cs.backgroundColor;
-          div.style.border = cs.border;
-          div.style.borderRadius = cs.borderRadius;
-          div.style.width = cs.width;
-          div.style.height = cs.height;
-          div.style.minWidth = cs.minWidth;
-          div.style.padding = '0 4px';
-          div.style.boxSizing = 'border-box';
-          div.style.overflow = 'visible';
-          div.className = input.className;
-          input.parentNode.replaceChild(div, input);
-          return { div, input };
-        });
-
-        // Step 2: Fix legend alignment in the real DOM temporarily
-        const legendStyle = document.createElement('style');
-        legendStyle.id = '__pdf-legend-fix';
-        legendStyle.textContent = `
-          .recharts-legend-item {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            margin-right: 12px !important;
-          }
-          .recharts-legend-item svg { vertical-align: middle !important; flex-shrink: 0 !important; }
-          .recharts-legend-item-text { vertical-align: middle !important; line-height: 1 !important; }
-        `;
-        document.head.appendChild(legendStyle);
-
-        // Step 3: Screenshot using real window dimensions so ResponsiveContainer renders correctly
-        const canvas = await html2canvas(contentEl, {
-          scale: 1.5,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#f9fafb',
-          width: contentEl.scrollWidth,
-          height: contentEl.scrollHeight,
-          windowWidth: window.innerWidth,
-          windowHeight: window.innerHeight,
-          scrollX: 0,
-          scrollY: 0,
-        });
-
-        // Step 4: Restore real DOM
-        swaps.forEach(({ div, input }) => div.parentNode.replaceChild(input, div));
-        document.getElementById('__pdf-legend-fix')?.remove();
-
-        const pxPerMm = canvas.width / contentWidth;
-        const pageHeightPx = (pageHeight - margin * 2) * pxPerMm;
-
-        let yOffset = 0;
-        while (yOffset < canvas.height) {
-          if (!firstPage) pdf.addPage();
-          firstPage = false;
-
-          const slicePx = Math.min(pageHeightPx, canvas.height - yOffset);
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = slicePx;
-          sliceCanvas.getContext('2d').drawImage(
-            canvas, 0, yOffset, canvas.width, slicePx, 0, 0, canvas.width, slicePx
-          );
-
-          const sliceHeightMm = (slicePx / pxPerMm);
-          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentWidth, sliceHeightMm);
-          yOffset += pageHeightPx;
-        }
-      }
-
-      setView(originalView);
-      setIsExporting(false);
-      pdf.save(`financial-plan-${new Date().toISOString().split('T')[0]}.pdf`);
-
-    } catch (error) {
-      console.error('Export to PDF failed:', error);
-      // Fallback: HTML export
-      try {
-      // Create HTML content for PDF-style report
-      let htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Financial Independence Plan</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-    h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
-    h2 { color: #666; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th { background-color: #4CAF50; color: white; padding: 12px; text-align: left; }
-    td { padding: 10px; border-bottom: 1px solid #ddd; }
-    tr:hover { background-color: #f5f5f5; }
-    .summary { background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0; }
-    .summary-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .summary-label { font-weight: bold; }
-    @media print { body { margin: 20px; } }
-  </style>
-</head>
-<body>
-  <h1>Financial Independence Plan</h1>
-  <p><strong>Generated:</strong> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
-  
-  <div class="summary">
-    <h2>Executive Summary</h2>
-    <div class="summary-item"><span class="summary-label">FI Year:</span><span>${financialIndependenceYear || 'Not calculated'}</span></div>
-    <div class="summary-item"><span class="summary-label">Current Age:</span><span>${currentAge}</span></div>
-    <div class="summary-item"><span class="summary-label">Planning Horizon:</span><span>${timeHorizon} years</span></div>
-    <div class="summary-item"><span class="summary-label">Total Assets:</span><span>${formatCurrency(assets.reduce((s, a) => s + a.balance, 0))}</span></div>
-    <div class="summary-item"><span class="summary-label">Total Debts:</span><span>${formatCurrency(loans.reduce((s, l) => s + l.balance, 0) + mortgages.reduce((s, m) => s + m.balance, 0))}</span></div>
-    <div class="summary-item"><span class="summary-label">Monthly Income:</span><span>${formatCurrency(salaries.reduce((s, sal) => s + sal.monthlyIncome, 0))}</span></div>
-    <div class="summary-item"><span class="summary-label">Monthly Expenses:</span><span>${formatCurrency(baseExpenses.reduce((s, e) => s + e.monthlyAmount, 0))}</span></div>
-  </div>
-`;
-
-      if (selections.incomes) {
-        htmlContent += `
-  <h2>Income</h2>
-  <h3>Salaries</h3>
-  <table>
-    <tr><th>Name</th><th>Monthly Income</th><th>Growth Rate</th><th>Age Range</th></tr>
-    ${salaries.map(s => `<tr><td>${s.name}</td><td>${formatCurrency(s.monthlyIncome)}</td><td>${s.growthRate}%</td><td>${s.minAge}-${s.maxAge}</td></tr>`).join('')}
-  </table>
-  
-  <h3>Allowances</h3>
-  <table>
-    <tr><th>Name</th><th>Monthly Income</th><th>Tax Rate</th><th>Age Range</th></tr>
-    ${allowances.map(a => `<tr><td>${a.name}</td><td>${formatCurrency(a.monthlyIncome)}</td><td>${a.taxRate}%</td><td>${a.minAge}-${a.maxAge}</td></tr>`).join('')}
-  </table>
-`;
-      }
-
-      if (selections.expenses) {
-        htmlContent += `
-  <h2>Expenses</h2>
-  <table>
-    <tr><th>Category</th><th>Monthly</th><th>Annual</th><th>Growth Rate</th></tr>
-    ${baseExpenses.map(e => `<tr><td>${e.category}</td><td>${formatCurrency(e.monthlyAmount)}</td><td>${formatCurrency(e.monthlyAmount * 12)}</td><td>${e.growthRate}%</td></tr>`).join('')}
-    <tr style="font-weight: bold; background-color: #f0f0f0;">
-      <td>Total</td>
-      <td>${formatCurrency(baseExpenses.reduce((s, e) => s + e.monthlyAmount, 0))}</td>
-      <td>${formatCurrency(baseExpenses.reduce((s, e) => s + e.monthlyAmount * 12, 0))}</td>
-      <td></td>
-    </tr>
-  </table>
-`;
-      }
-
-      if (selections.assets) {
-        htmlContent += `
-  <h2>Assets</h2>
-  <table>
-    <tr><th>Name</th><th>Balance</th><th>Annual Return</th><th>Tax Rate</th></tr>
-    ${assets.map(a => `<tr><td>${a.name}</td><td>${formatCurrency(a.balance)}</td><td>${a.annualReturn}%</td><td>${a.taxRate}%</td></tr>`).join('')}
-    <tr style="font-weight: bold; background-color: #f0f0f0;">
-      <td>Total</td>
-      <td>${formatCurrency(assets.reduce((s, a) => s + a.balance, 0))}</td>
-      <td></td>
-      <td></td>
-    </tr>
-  </table>
-`;
-      }
-
-      if (selections.debts && (loans.length > 0 || mortgages.length > 0)) {
-        htmlContent += `<h2>Debts</h2>`;
-        
-        if (loans.length > 0) {
-          htmlContent += `
-  <h3>Loans</h3>
-  <table>
-    <tr><th>Name</th><th>Balance</th><th>Interest Rate</th><th>Months Remaining</th><th>Monthly Payment</th></tr>
-    ${loans.map(l => `<tr><td>${l.name}</td><td>${formatCurrency(l.balance)}</td><td>${l.interestRate}%</td><td>${l.remainingMonths}</td><td>${formatCurrency(l.monthlyPayment)}</td></tr>`).join('')}
-  </table>
-`;
-        }
-        
-        if (mortgages.length > 0) {
-          htmlContent += `
-  <h3>Mortgages</h3>
-  <table>
-    <tr><th>Name</th><th>Balance</th><th>Interest Rate</th><th>Months Remaining</th><th>Monthly Payment</th></tr>
-    ${mortgages.map(m => `<tr><td>${m.name}</td><td>${formatCurrency(m.balance)}</td><td>${m.interestRate}%</td><td>${m.remainingMonths}</td><td>${formatCurrency(m.monthlyPayment)}</td></tr>`).join('')}
-  </table>
-`;
-        }
-      }
-
-      if (selections.dashboard && projectionData.length > 0) {
-        // Show first 10 years and last 5 years of projection
-        const firstYears = projectionData.slice(0, 10);
-        const lastYears = projectionData.slice(-5);
-        
-        htmlContent += `
-  <h2>Financial Projection (Sample Years)</h2>
-  <table>
-    <tr><th>Year</th><th>Age</th><th>Assets</th><th>Income</th><th>Expenses</th><th>FI Status</th></tr>
-    ${firstYears.map(d => `<tr><td>${d.year}</td><td>${d.age}</td><td>${formatCurrency(d.totalAssets)}</td><td>${formatCurrency(d.totalIncome)}</td><td>${formatCurrency(d.totalExpenses)}</td><td>${d.reachedFI ? '✓ FI' : ''}</td></tr>`).join('')}
-    <tr><td colspan="6" style="text-align: center; background-color: #f0f0f0;">...</td></tr>
-    ${lastYears.map(d => `<tr><td>${d.year}</td><td>${d.age}</td><td>${formatCurrency(d.totalAssets)}</td><td>${formatCurrency(d.totalIncome)}</td><td>${formatCurrency(d.totalExpenses)}</td><td>${d.reachedFI ? '✓ FI' : ''}</td></tr>`).join('')}
-  </table>
-  <p><em>Full projection data available in CSV export</em></p>
-`;
-      }
-
-      htmlContent += `
-  <hr style="margin-top: 40px;">
-  <p style="text-align: center; color: #666; font-size: 0.9em;">Generated by Financial Independence Planner</p>
-</body>
-</html>
-`;
-
-      // Download HTML
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `financial-plan-${new Date().toISOString().split('T')[0]}.html`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setIsExporting(false);
-      setShowExportPopup(false);
-    } catch (innerError) {
-      console.error('Export to HTML failed:', innerError);
-      alert('Failed to export to PDF. Please try again.');
-      setIsExporting(false);
-    }
-  }
-};
+    setShowExportPopup(false);
+    setPrintSelections(selections);
+    setIsPrinting(true);
+    // Wait for React to render all sections
+    await new Promise(resolve => setTimeout(resolve, 800));
+    window.print();
+    setIsPrinting(false);
+    setPrintSelections(null);
+  };
 
   const handleExport = () => {
     if (exportFormat === 'pdf') {
@@ -3757,11 +3492,23 @@ function FinancialPlanner() {
         </div>
 
         <div id="export-content">
-          {view === 'dashboard' && <DashboardView />}
-          {view === 'expenses' && <ExpensesView />}
-          {view === 'incomes' && <IncomesView />}
-          {view === 'assets' && <AssetsView />}
-          {view === 'debts' && <DebtsView />}
+          {isPrinting ? (
+            <div>
+              {printSelections?.dashboard && <div className="print-section"><DashboardView /></div>}
+              {printSelections?.expenses && <div className="print-section"><ExpensesView /></div>}
+              {printSelections?.incomes && <div className="print-section"><IncomesView /></div>}
+              {printSelections?.assets && <div className="print-section"><AssetsView /></div>}
+              {printSelections?.debts && <div className="print-section"><DebtsView /></div>}
+            </div>
+          ) : (
+            <div>
+              {view === 'dashboard' && <DashboardView />}
+              {view === 'expenses' && <ExpensesView />}
+              {view === 'incomes' && <IncomesView />}
+              {view === 'assets' && <AssetsView />}
+              {view === 'debts' && <DebtsView />}
+            </div>
+          )}
         </div>
 
         {/* Loading overlay during export */}
