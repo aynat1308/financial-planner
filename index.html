@@ -133,9 +133,9 @@ function FinancialPlanner() {
   const [calculateFI, setCalculateFI] = useState(savedData?.calculateFI ?? false); // FI calculation toggle
 
   const [assets, setAssets] = useState(savedData?.assets || [
-    { id: 1, name: 'Hishtalmut', balance: 500000, initialBalance: 500000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
-    { id: 2, name: 'Gemel', balance: 200000, initialBalance: 200000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
-    { id: 3, name: 'Investment Account', balance: 1500000, initialBalance: 1500000, annualReturn: 7, taxRate: 25, accessible: true, withdrawalAge: 0, withdrawLimit: null },
+    { id: 1, name: 'Hishtalmut', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
+    { id: 2, name: 'Gemel', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
+    { id: 3, name: 'Investment Account', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 25, accessible: true, withdrawalAge: 0, withdrawLimit: null },
   ]);
 
   const [allowances, setAllowances] = useState(savedData?.allowances || [
