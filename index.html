@@ -243,33 +243,6 @@ function FinancialPlanner() {
     setExpandedYears(newExpanded);
   };
 
-  const updateYearlyExpenseInDashboard = (year, categoryId, monthlyAmount) => {
-    setYearlyExpenseOverrides(prev => ({
-      ...prev,
-      [year]: {
-        ...(prev[year] || {}),
-        [categoryId]: monthlyAmount
-      }
-    }));
-  };
-
-  const updateYearlyAssetWithdrawal = (year, assetId, amount) => {
-    setYearlyAssetWithdrawalOverrides(prev => ({
-      ...prev,
-      [year]: {
-        ...(prev[year] || {}),
-        [assetId]: amount
-      }
-    }));
-  };
-
-  const getLaborIncomeForYear = (year, yearOffset) => {
-    if (yearlyLaborIncomeOverrides[year] !== undefined) {
-      return yearlyLaborIncomeOverrides[year] * 12;
-    }
-    return initialParams.monthlyLaborIncome * 12 * Math.pow(1 + initialParams.laborIncomeGrowth / 100, yearOffset);
-  };
-
   const addExpense = () => {
     setBaseExpenses(prev => [...prev, { 
       id: Date.now(), 
