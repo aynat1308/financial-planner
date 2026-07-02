@@ -54,8 +54,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   
-  <!-- Babel -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Babel (pinned to v7: v8 defaults JSX to the automatic runtime, which emits
+       bare `import`s that this non-module script cannot execute) -->
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
   
   <!-- App code (inlined) -->
   <script type="text/babel" data-presets="env,react">
