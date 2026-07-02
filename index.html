@@ -71,12 +71,39 @@ const XLSX = window.XLSX;
 // LocalStorage key
 const STORAGE_KEY = 'financial-planner-data';
 
+// Normalize legacy/corrupt saved data into the shapes the app expects.
+// Older versions stored yearlyExpenseOverrides as an object keyed by category id
+// ({ [year]: { [categoryId]: monthlyAmount } }), but every reader now treats it
+// as an array ({ [year]: [{ categoryId, monthlyAmount }] }) and calls .find on
+// it. Object-shaped data therefore crashed the whole app on load.
+const normalizeStoredData = (data) => {
+  if (!data || typeof data !== 'object') return data;
+  const overrides = data.yearlyExpenseOverrides;
+  if (overrides && typeof overrides === 'object') {
+    const normalized = {};
+    Object.keys(overrides).forEach((year) => {
+      const entry = overrides[year];
+      if (Array.isArray(entry)) {
+        normalized[year] = entry;
+      } else if (entry && typeof entry === 'object') {
+        normalized[year] = Object.keys(entry).map((categoryId) => ({
+          categoryId: Number(categoryId),
+          monthlyAmount: entry[categoryId],
+        }));
+      }
+      // drop anything else (null/primitive) — it cannot be a valid override
+    });
+    data.yearlyExpenseOverrides = normalized;
+  }
+  return data;
+};
+
 // Load data from LocalStorage
 const loadFromStorage = () => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      return JSON.parse(saved);
+      return normalizeStoredData(JSON.parse(saved));
     }
   } catch (error) {
     console.error('Error loading from localStorage:', error);
@@ -3563,8 +3590,51 @@ function FinancialPlanner() {
   );
 }
 
+// Catch any render-time crash (e.g. from unexpected saved data) and show a
+// recovery screen instead of a blank page, with a one-click way to clear the
+// locally stored data and start fresh.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, message: String((error && error.message) || error) };
+  }
+  componentDidCatch(error, info) {
+    console.error('App crashed:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
+          <div className="max-w-md w-full bg-white rounded-xl border border-gray-200 shadow p-6 text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h1 className="text-xl font-semibold text-gray-800 mb-2">Something went wrong</h1>
+            <p className="text-sm text-gray-600 mb-4">
+              The planner hit an error while loading. Resetting clears the data
+              saved in this browser and reloads with the defaults.
+            </p>
+            <p className="text-xs text-gray-400 mb-4 break-words">{this.state.message}</p>
+            <button
+              onClick={() => {
+                try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Reset saved data &amp; reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<FinancialPlanner />);
+root.render(<ErrorBoundary><FinancialPlanner /></ErrorBoundary>);
     </script>
 </body>
 </html>
