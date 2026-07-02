@@ -1,0 +1,27 @@
+{
+  "name": "financial_planner",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aynat1308/financial-planner.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/aynat1308/financial-planner/issues"
+  },
+  "homepage": "https://github.com/aynat1308/financial-planner#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
