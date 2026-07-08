@@ -95,6 +95,13 @@ const normalizeStoredData = (data) => {
     });
     data.yearlyExpenseOverrides = normalized;
   }
+  if (Array.isArray(data.assets)) {
+    data.assets = data.assets.map((asset) => (
+      asset && asset.profit === undefined
+        ? { ...asset, profit: asset.balance }
+        : asset
+    ));
+  }
   return data;
 };
 
