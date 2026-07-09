@@ -105,6 +105,28 @@ const normalizeStoredData = (data) => {
   return data;
 };
 
+// Growth accrues entirely as profit (gain); principal (balance - profit) is unchanged.
+const applyGrowth = (balance, profit, annualReturn) => {
+  const growth = balance * (annualReturn / 100);
+  return { balance: balance + growth, profit: profit + growth };
+};
+
+// Proportional capital-gains tax: only the profit share of a withdrawal is taxable.
+const taxOnWithdrawal = (balance, profit, taxRate, grossAmount) => {
+  const profitFraction = balance > 0 ? profit / balance : 0;
+  const taxable = grossAmount * profitFraction;
+  const tax = taxable * (taxRate / 100);
+  return {
+    tax,
+    newBalance: balance - grossAmount,
+    newProfit: profit - grossAmount * profitFraction,
+  };
+};
+
+if (typeof window !== 'undefined') {
+  window.__plannerTax = { applyGrowth, taxOnWithdrawal };
+}
+
 // Load data from LocalStorage
 const loadFromStorage = () => {
   try {
