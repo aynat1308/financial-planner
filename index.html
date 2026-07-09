@@ -2767,6 +2767,7 @@ function FinancialPlanner() {
     const [local, setLocal] = React.useState({
       name: asset.name,
       balance: String(asset.balance),
+      profit: String(asset.profit),
       annualReturn: String(asset.annualReturn),
       taxRate: String(asset.taxRate),
       withdrawalAge: asset.withdrawalAge === 999 ? '' : String(asset.withdrawalAge),
@@ -2778,6 +2779,7 @@ function FinancialPlanner() {
       setLocal({
         name: asset.name,
         balance: String(asset.balance),
+        profit: String(asset.profit),
         annualReturn: String(asset.annualReturn),
         taxRate: String(asset.taxRate),
         withdrawalAge: asset.withdrawalAge === 999 ? '' : String(asset.withdrawalAge),
@@ -2846,8 +2848,22 @@ function FinancialPlanner() {
           />
         </div>
 
-        {/* Annual Return */}
+        {/* Profit */}
         <div className="col-span-2">
+          <input
+            data-testid={`profit-input-${asset.id}`}
+            type="text"
+            inputMode="numeric"
+            value={local.profit}
+            onChange={(e) => setLocal(p => ({ ...p, profit: e.target.value }))}
+            onBlur={() => commit('profit', local.profit)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Annual Return */}
+        <div className="col-span-1">
           <input
             type="text"
             inputMode="decimal"
@@ -2887,7 +2903,7 @@ function FinancialPlanner() {
         </div>
 
         {/* Withdraw Limit */}
-        <div className="col-span-2">
+        <div className="col-span-1">
           <input
             type="text"
             inputMode="decimal"
@@ -2945,10 +2961,11 @@ function FinancialPlanner() {
     <div className="grid grid-cols-12 gap-3 px-3 pb-2 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
       <div className="col-span-2">Name</div>
       <div className="col-span-2 text-right">Balance (₪)</div>
-      <div className="col-span-2 text-right">Return (%)</div>
+      <div className="col-span-2 text-right">Profit (₪)</div>
+      <div className="col-span-1 text-right">Return (%)</div>
       <div className="col-span-1 text-right">Tax (%)</div>
       <div className="col-span-1 text-right">Min Age</div>
-      <div className="col-span-2 text-center">Withdraw Limit (%)</div>
+      <div className="col-span-1 text-center">Withdraw Limit (%)</div>
       <div className="col-span-1 text-center">Access</div>
       <div className="col-span-1"></div>
     </div>

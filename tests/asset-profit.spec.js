@@ -23,3 +23,32 @@ test('legacy asset without profit migrates to profit === balance', async ({ page
   }, KEY);
   expect(profit).toBe(80000);
 });
+
+test('Profit column header is visible on the Assets view', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate((key) => localStorage.removeItem(key), KEY);
+  await page.reload();
+  await page.getByRole('button', { name: 'Assets' }).click();
+  await expect(page.getByText('Profit (₪)')).toBeVisible();
+});
+
+test('editing profit persists across reload', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate((key) => localStorage.removeItem(key), KEY);
+  await page.reload();
+  await page.getByRole('button', { name: 'Assets' }).click();
+
+  const input = page.locator('[data-testid="profit-input-3"]'); // Investment Account
+  await input.fill('40000');
+  await input.blur();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Assets' }).click();
+  await expect(page.locator('[data-testid="profit-input-3"]')).toHaveValue('40000');
+
+  const persisted = await page.evaluate((key) => {
+    const data = JSON.parse(localStorage.getItem(key));
+    return data.assets.find(a => a.id === 3).profit;
+  }, KEY);
+  expect(persisted).toBe(40000);
+});
