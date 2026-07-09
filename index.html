@@ -411,8 +411,10 @@ function FinancialPlanner() {
     for (const asset of accessibleAssets) {
       if (remaining <= 0) break;
       
-      const grossNeeded = asset.taxRate < 100
-        ? remaining / (1 - asset.taxRate / 100)
+      const profitFraction = asset.balance > 0 ? asset.profit / asset.balance : 0;
+      const effectiveRate = profitFraction * (asset.taxRate / 100);
+      const grossNeeded = effectiveRate < 1
+        ? remaining / (1 - effectiveRate)
         : remaining;
       
       // Apply withdrawal limit if set
@@ -424,7 +426,7 @@ function FinancialPlanner() {
       
       const actualWithdrawal = Math.min(grossNeeded, maxWithdrawal);
       withdrawalPlan[asset.name] = actualWithdrawal;
-      remaining -= actualWithdrawal * (1 - asset.taxRate / 100);
+      remaining -= actualWithdrawal * (1 - profitFraction * (asset.taxRate / 100));
     }
 
     return { withdrawalPlan, remainingShortfall: Math.max(0, remaining) };
