@@ -63,3 +63,18 @@ test('half-profit account is taxed on half the withdrawal', async ({ page }) => 
   expect(r.tax).toBe(2500); // 20000 * 50% * 25%
   expect(r.newProfit).toBe(40000);
 });
+
+test('taxOnWithdrawal clamps profitFraction to at most 1 (profit > balance)', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.getByRole('button', { name: 'Assets' }).click();
+  const r = await page.evaluate(() => window.__plannerTax.taxOnWithdrawal(50000, 100000, 25, 10000));
+  // fraction clamps 2 -> 1: tax = 10000 * 1 * 25% = 2500 (not 5000)
+  expect(r.tax).toBe(2500);
+});
+
+test('taxOnWithdrawal clamps negative profit fraction to 0', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.getByRole('button', { name: 'Assets' }).click();
+  const r = await page.evaluate(() => window.__plannerTax.taxOnWithdrawal(100000, -20000, 25, 10000));
+  expect(r.tax).toBe(0);
+});

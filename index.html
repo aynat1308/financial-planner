@@ -113,7 +113,7 @@ const applyGrowth = (balance, profit, annualReturn) => {
 
 // Proportional capital-gains tax: only the profit share of a withdrawal is taxable.
 const taxOnWithdrawal = (balance, profit, taxRate, grossAmount) => {
-  const profitFraction = balance > 0 ? profit / balance : 0;
+  const profitFraction = balance > 0 ? Math.min(Math.max(profit / balance, 0), 1) : 0;
   const taxable = grossAmount * profitFraction;
   const tax = taxable * (taxRate / 100);
   return {
@@ -374,9 +374,14 @@ function FinancialPlanner() {
   const updateAsset = (id, field, value) => {
     setAssets(prev => prev.map(asset => {
       if (asset.id === id) {
-        // When balance is updated, also update initialBalance
+        // When balance is updated, also update initialBalance and keep profit within [0, balance].
         if (field === 'balance') {
-          return { ...asset, balance: value, initialBalance: value };
+          const clampedProfit = Math.min(Math.max(asset.profit, 0), value);
+          return { ...asset, balance: value, initialBalance: value, profit: clampedProfit };
+        }
+        // Profit cannot be negative or exceed balance (cost basis = balance - profit).
+        if (field === 'profit') {
+          return { ...asset, profit: Math.min(Math.max(value, 0), asset.balance) };
         }
         return { ...asset, [field]: value };
       }
@@ -411,7 +416,7 @@ function FinancialPlanner() {
     for (const asset of accessibleAssets) {
       if (remaining <= 0) break;
       
-      const profitFraction = asset.balance > 0 ? asset.profit / asset.balance : 0;
+      const profitFraction = asset.balance > 0 ? Math.min(Math.max(asset.profit / asset.balance, 0), 1) : 0;
       const effectiveRate = profitFraction * (asset.taxRate / 100);
       const grossNeeded = effectiveRate < 1
         ? remaining / (1 - effectiveRate)
@@ -2822,7 +2827,7 @@ function FinancialPlanner() {
         withdrawalAge: asset.withdrawalAge === 999 ? '' : String(asset.withdrawalAge),
         withdrawLimit: asset.withdrawLimit === null ? '' : String(asset.withdrawLimit),
       });
-    }, [asset.id]); // only re-sync when the row identity changes (new asset added)
+    }, [asset.id, asset.profit, asset.balance]); // re-sync when identity changes or clamped values are written back
 
     const commit = (field, raw, parser = parseFloat) => {
       const parsed = parser(raw);
@@ -2875,6 +2880,7 @@ function FinancialPlanner() {
         {/* Balance */}
         <div className="col-span-2">
           <input
+            data-testid={`balance-input-${asset.id}`}
             type="text"
             inputMode="numeric"
             value={local.balance}
