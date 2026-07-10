@@ -499,7 +499,10 @@ function FinancialPlanner() {
         for (const [assetName, amount] of Object.entries(withdrawalPlan)) {
           const assetIdx = testBalances.findIndex(a => a.name === assetName);
           if (assetIdx !== -1) {
-            testBalances[assetIdx].balance -= amount;
+            const t = testBalances[assetIdx];
+            const upd = taxOnWithdrawal(t.balance, t.profit, t.taxRate, amount);
+            testBalances[assetIdx].balance = upd.newBalance;
+            testBalances[assetIdx].profit = upd.newProfit;
           }
         }
       }
@@ -554,7 +557,10 @@ function FinancialPlanner() {
           for (const [assetName, amount] of Object.entries(withdrawalPlan)) {
             const assetIdx = simulatedBalances.findIndex(a => a.name === assetName);
             if (assetIdx !== -1) {
-              simulatedBalances[assetIdx].balance -= amount;
+              const s = simulatedBalances[assetIdx];
+              const upd = taxOnWithdrawal(s.balance, s.profit, s.taxRate, amount);
+              simulatedBalances[assetIdx].balance = upd.newBalance;
+              simulatedBalances[assetIdx].profit = upd.newProfit;
             }
           }
         }
@@ -665,6 +671,8 @@ function FinancialPlanner() {
       let totalTaxesPaid = allowanceTaxesPaid;
       let capitalGainsTax = 0; // Track capital gains tax separately
       const withdrawalsByAsset = {};
+      const taxByAsset = {};
+      const afterTaxByAsset = {};
       let assetWithdrawalTotal = 0;
       let actualLaborIncome = 0;
       let reachedFI = false;
@@ -688,12 +696,15 @@ function FinancialPlanner() {
             const assetIdx = assetBalances.findIndex(a => a.name === assetName);
             if (assetIdx !== -1) {
               const asset = assetBalances[assetIdx];
-              const tax = amount * (asset.taxRate / 100);
-              capitalGainsTax += tax; // Track as capital gains
-              totalTaxesPaid += tax;
-              assetBalances[assetIdx].balance -= amount;
+              const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+              capitalGainsTax += upd.tax;
+              totalTaxesPaid += upd.tax;
+              assetBalances[assetIdx].balance = upd.newBalance;
+              assetBalances[assetIdx].profit = upd.newProfit;
               withdrawalsByAsset[assetName] = amount;
-              assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+              taxByAsset[assetName] = upd.tax;
+              afterTaxByAsset[assetName] = amount - upd.tax;
+              assetWithdrawalTotal += amount - upd.tax;
             }
           }
         }
@@ -718,12 +729,15 @@ function FinancialPlanner() {
               const assetIdx = assetBalances.findIndex(a => a.name === assetName);
               if (assetIdx !== -1) {
                 const asset = assetBalances[assetIdx];
-                const tax = amount * (asset.taxRate / 100);
-                capitalGainsTax += tax; // Track as capital gains
-                totalTaxesPaid += tax;
-                assetBalances[assetIdx].balance -= amount;
+                const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+                capitalGainsTax += upd.tax;
+                totalTaxesPaid += upd.tax;
+                assetBalances[assetIdx].balance = upd.newBalance;
+                assetBalances[assetIdx].profit = upd.newProfit;
                 withdrawalsByAsset[assetName] = amount;
-                assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+                taxByAsset[assetName] = upd.tax;
+                afterTaxByAsset[assetName] = amount - upd.tax;
+                assetWithdrawalTotal += amount - upd.tax;
               }
             }
           }
@@ -746,12 +760,15 @@ function FinancialPlanner() {
               const assetIdx = assetBalances.findIndex(a => a.name === assetName);
               if (assetIdx !== -1) {
                 const asset = assetBalances[assetIdx];
-                const tax = amount * (asset.taxRate / 100);
-                capitalGainsTax += tax; // Track as capital gains
-                totalTaxesPaid += tax;
-                assetBalances[assetIdx].balance -= amount;
+                const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+                capitalGainsTax += upd.tax;
+                totalTaxesPaid += upd.tax;
+                assetBalances[assetIdx].balance = upd.newBalance;
+                assetBalances[assetIdx].profit = upd.newProfit;
                 withdrawalsByAsset[assetName] = amount;
-                assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+                taxByAsset[assetName] = upd.tax;
+                afterTaxByAsset[assetName] = amount - upd.tax;
+                assetWithdrawalTotal += amount - upd.tax;
               }
             }
           }
@@ -799,11 +816,10 @@ function FinancialPlanner() {
       
       assetBalances.forEach(asset => {
         dataPoint[`${asset.name}_balance`] = Math.round(asset.balance);
-        const grossWithdrawal = withdrawalsByAsset[asset.name] || 0;
-        const afterTaxWithdrawal = grossWithdrawal * (1 - asset.taxRate / 100);
-        const taxPaid = grossWithdrawal * (asset.taxRate / 100);
+        const afterTaxWithdrawal = afterTaxByAsset[asset.name] || 0;
+        const taxPaid = taxByAsset[asset.name] || 0;
         dataPoint[`${asset.name}_withdrawal`] = Math.round(afterTaxWithdrawal);
-        dataPoint[`${asset.name}_tax`] = Math.round(taxPaid); // Store tax per asset
+        dataPoint[`${asset.name}_tax`] = Math.round(taxPaid);
         dataPoint._debugAssetSum += Math.round(afterTaxWithdrawal);
       });
 

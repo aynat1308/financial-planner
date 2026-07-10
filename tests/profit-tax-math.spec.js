@@ -41,3 +41,25 @@ test('applyGrowth adds all growth to profit', async ({ page }) => {
   const r = await page.evaluate(() => window.__plannerTax.applyGrowth(100000, 30000, 7));
   expect(r).toEqual({ balance: 107000, profit: 37000 });
 });
+
+test('migrated data (profit=balance) reproduces flat-rate tax on withdrawals', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate(() => {
+    localStorage.setItem('financial-planner-data', JSON.stringify({
+      assets: [{ id: 3, name: 'Investment Account', balance: 100000, initialBalance: 100000,
+                 annualReturn: 0, taxRate: 25, accessible: true, withdrawalAge: 0, withdrawLimit: null }],
+    }));
+  });
+  await page.reload();
+  // profit migrates to 100000 => profitFraction 1 => same as flat 25%.
+  const r = await page.evaluate(() => window.__plannerTax.taxOnWithdrawal(100000, 100000, 25, 20000));
+  expect(r.tax).toBe(5000);
+});
+
+test('half-profit account is taxed on half the withdrawal', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.getByRole('button', { name: 'Assets' }).click();
+  const r = await page.evaluate(() => window.__plannerTax.taxOnWithdrawal(100000, 50000, 25, 20000));
+  expect(r.tax).toBe(2500); // 20000 * 50% * 25%
+  expect(r.newProfit).toBe(40000);
+});
