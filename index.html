@@ -450,10 +450,10 @@ function FinancialPlanner() {
       const testAge = currentAge + testYearOffset;
       
       // Apply returns
-      testBalances = testBalances.map(asset => ({
-        ...asset,
-        balance: asset.balance * (1 + asset.annualReturn / 100)
-      }));
+      testBalances = testBalances.map(asset => {
+        const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+        return { ...asset, balance: grown.balance, profit: grown.profit };
+      });
       
       // Before checking if we can reach FI from here, simulate what happens with labor income
       const growthMultiplier = Math.pow(1 + initialParams.laborIncomeGrowth / 100, testYearOffset);
@@ -560,10 +560,10 @@ function FinancialPlanner() {
         }
         
         if (futureOffset < timeHorizon) {
-          simulatedBalances = simulatedBalances.map(asset => ({
-            ...asset,
-            balance: asset.balance * (1 + asset.annualReturn / 100)
-          }));
+          simulatedBalances = simulatedBalances.map(asset => {
+            const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+            return { ...asset, balance: grown.balance, profit: grown.profit };
+          });
         }
       }
       
@@ -626,11 +626,8 @@ function FinancialPlanner() {
       
       // Apply investment returns to all assets
       assetBalances = assetBalances.map(asset => {
-        const returnAmount = asset.balance * (asset.annualReturn / 100);
-        return {
-          ...asset,
-          balance: asset.balance + returnAmount
-        };
+        const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+        return { ...asset, balance: grown.balance, profit: grown.profit };
       });
 
       // Fix incomes (allowances) active this year
