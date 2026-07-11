@@ -86,3 +86,20 @@ test('lowering balance below profit clamps profit down', async ({ page }) => {
   }, KEY);
   expect(stored).toEqual({ balance: 40000, profit: 40000 });
 });
+
+test('profit input is editable only when tax rate > 0', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.evaluate((key) => localStorage.removeItem(key), KEY);
+  await page.reload();
+  await page.getByRole('button', { name: 'Assets' }).click();
+
+  // Seed defaults: Hishtalmut (id 1) taxRate 0 -> disabled; Investment (id 3) taxRate 25 -> enabled.
+  await expect(page.locator('[data-testid="profit-input-1"]')).toBeDisabled();
+  await expect(page.locator('[data-testid="profit-input-3"]')).toBeEnabled();
+
+  // Give the 0-tax account a tax rate; its profit box should become editable.
+  const tax = page.locator('[data-testid="tax-input-1"]');
+  await tax.fill('25');
+  await tax.blur();
+  await expect(page.locator('[data-testid="profit-input-1"]')).toBeEnabled();
+});

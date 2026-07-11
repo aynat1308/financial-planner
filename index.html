@@ -2901,7 +2901,9 @@ function FinancialPlanner() {
             onChange={(e) => setLocal(p => ({ ...p, profit: e.target.value }))}
             onBlur={() => commit('profit', local.profit)}
             onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-            className={inputCls}
+            disabled={Number(asset.taxRate) === 0}
+            title={Number(asset.taxRate) === 0 ? 'Set a tax rate above 0 to edit profit' : undefined}
+            className={Number(asset.taxRate) === 0 ? `${inputCls} bg-gray-100 text-gray-400 cursor-not-allowed` : inputCls}
           />
         </div>
 
@@ -2921,6 +2923,7 @@ function FinancialPlanner() {
         {/* Tax Rate */}
         <div className="col-span-1">
           <input
+            data-testid={`tax-input-${asset.id}`}
             type="text"
             inputMode="decimal"
             value={local.taxRate}
