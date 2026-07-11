@@ -95,8 +95,37 @@ const normalizeStoredData = (data) => {
     });
     data.yearlyExpenseOverrides = normalized;
   }
+  if (Array.isArray(data.assets)) {
+    data.assets = data.assets.map((asset) => (
+      asset && asset.profit === undefined
+        ? { ...asset, profit: asset.balance }
+        : asset
+    ));
+  }
   return data;
 };
+
+// Growth accrues entirely as profit (gain); principal (balance - profit) is unchanged.
+const applyGrowth = (balance, profit, annualReturn) => {
+  const growth = balance * (annualReturn / 100);
+  return { balance: balance + growth, profit: profit + growth };
+};
+
+// Proportional capital-gains tax: only the profit share of a withdrawal is taxable.
+const taxOnWithdrawal = (balance, profit, taxRate, grossAmount) => {
+  const profitFraction = balance > 0 ? Math.min(Math.max(profit / balance, 0), 1) : 0;
+  const taxable = grossAmount * profitFraction;
+  const tax = taxable * (taxRate / 100);
+  return {
+    tax,
+    newBalance: balance - grossAmount,
+    newProfit: profit - grossAmount * profitFraction,
+  };
+};
+
+if (typeof window !== 'undefined') {
+  window.__plannerTax = { applyGrowth, taxOnWithdrawal };
+}
 
 // Load data from LocalStorage
 const loadFromStorage = () => {
@@ -161,9 +190,9 @@ function FinancialPlanner() {
   const [calculateFI, setCalculateFI] = useState(savedData?.calculateFI ?? false); // FI calculation toggle
 
   const [assets, setAssets] = useState(savedData?.assets || [
-    { id: 1, name: 'Hishtalmut', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
-    { id: 2, name: 'Gemel', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null },
-    { id: 3, name: 'Investment Account', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 25, accessible: true, withdrawalAge: 0, withdrawLimit: null },
+    { id: 1, name: 'Hishtalmut', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null, profit: 100000 },
+    { id: 2, name: 'Gemel', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 0, accessible: true, withdrawalAge: 0, withdrawLimit: null, profit: 100000 },
+    { id: 3, name: 'Investment Account', balance: 100000, initialBalance: 100000, annualReturn: 7, taxRate: 25, accessible: true, withdrawalAge: 0, withdrawLimit: null, profit: 100000 },
   ]);
 
   const [allowances, setAllowances] = useState(savedData?.allowances || [
@@ -338,15 +367,21 @@ function FinancialPlanner() {
       accessible: true,
       withdrawalAge: 0,
       withdrawLimit: null,
+      profit: 0,
     }]);
   };
 
   const updateAsset = (id, field, value) => {
     setAssets(prev => prev.map(asset => {
       if (asset.id === id) {
-        // When balance is updated, also update initialBalance
+        // When balance is updated, also update initialBalance and keep profit within [0, balance].
         if (field === 'balance') {
-          return { ...asset, balance: value, initialBalance: value };
+          const clampedProfit = Math.min(Math.max(asset.profit, 0), value);
+          return { ...asset, balance: value, initialBalance: value, profit: clampedProfit };
+        }
+        // Profit cannot be negative or exceed balance (cost basis = balance - profit).
+        if (field === 'profit') {
+          return { ...asset, profit: Math.min(Math.max(value, 0), asset.balance) };
         }
         return { ...asset, [field]: value };
       }
@@ -381,8 +416,10 @@ function FinancialPlanner() {
     for (const asset of accessibleAssets) {
       if (remaining <= 0) break;
       
-      const grossNeeded = asset.taxRate < 100
-        ? remaining / (1 - asset.taxRate / 100)
+      const profitFraction = asset.balance > 0 ? Math.min(Math.max(asset.profit / asset.balance, 0), 1) : 0;
+      const effectiveRate = profitFraction * (asset.taxRate / 100);
+      const grossNeeded = effectiveRate < 1
+        ? remaining / (1 - effectiveRate)
         : remaining;
       
       // Apply withdrawal limit if set
@@ -394,7 +431,7 @@ function FinancialPlanner() {
       
       const actualWithdrawal = Math.min(grossNeeded, maxWithdrawal);
       withdrawalPlan[asset.name] = actualWithdrawal;
-      remaining -= actualWithdrawal * (1 - asset.taxRate / 100);
+      remaining -= actualWithdrawal * (1 - profitFraction * (asset.taxRate / 100));
     }
 
     return { withdrawalPlan, remainingShortfall: Math.max(0, remaining) };
@@ -418,10 +455,10 @@ function FinancialPlanner() {
       const testAge = currentAge + testYearOffset;
       
       // Apply returns
-      testBalances = testBalances.map(asset => ({
-        ...asset,
-        balance: asset.balance * (1 + asset.annualReturn / 100)
-      }));
+      testBalances = testBalances.map(asset => {
+        const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+        return { ...asset, balance: grown.balance, profit: grown.profit };
+      });
       
       // Before checking if we can reach FI from here, simulate what happens with labor income
       const growthMultiplier = Math.pow(1 + initialParams.laborIncomeGrowth / 100, testYearOffset);
@@ -467,7 +504,10 @@ function FinancialPlanner() {
         for (const [assetName, amount] of Object.entries(withdrawalPlan)) {
           const assetIdx = testBalances.findIndex(a => a.name === assetName);
           if (assetIdx !== -1) {
-            testBalances[assetIdx].balance -= amount;
+            const t = testBalances[assetIdx];
+            const upd = taxOnWithdrawal(t.balance, t.profit, t.taxRate, amount);
+            testBalances[assetIdx].balance = upd.newBalance;
+            testBalances[assetIdx].profit = upd.newProfit;
           }
         }
       }
@@ -522,16 +562,19 @@ function FinancialPlanner() {
           for (const [assetName, amount] of Object.entries(withdrawalPlan)) {
             const assetIdx = simulatedBalances.findIndex(a => a.name === assetName);
             if (assetIdx !== -1) {
-              simulatedBalances[assetIdx].balance -= amount;
+              const s = simulatedBalances[assetIdx];
+              const upd = taxOnWithdrawal(s.balance, s.profit, s.taxRate, amount);
+              simulatedBalances[assetIdx].balance = upd.newBalance;
+              simulatedBalances[assetIdx].profit = upd.newProfit;
             }
           }
         }
         
         if (futureOffset < timeHorizon) {
-          simulatedBalances = simulatedBalances.map(asset => ({
-            ...asset,
-            balance: asset.balance * (1 + asset.annualReturn / 100)
-          }));
+          simulatedBalances = simulatedBalances.map(asset => {
+            const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+            return { ...asset, balance: grown.balance, profit: grown.profit };
+          });
         }
       }
       
@@ -594,11 +637,8 @@ function FinancialPlanner() {
       
       // Apply investment returns to all assets
       assetBalances = assetBalances.map(asset => {
-        const returnAmount = asset.balance * (asset.annualReturn / 100);
-        return {
-          ...asset,
-          balance: asset.balance + returnAmount
-        };
+        const grown = applyGrowth(asset.balance, asset.profit, asset.annualReturn);
+        return { ...asset, balance: grown.balance, profit: grown.profit };
       });
 
       // Fix incomes (allowances) active this year
@@ -636,6 +676,8 @@ function FinancialPlanner() {
       let totalTaxesPaid = allowanceTaxesPaid;
       let capitalGainsTax = 0; // Track capital gains tax separately
       const withdrawalsByAsset = {};
+      const taxByAsset = {};
+      const afterTaxByAsset = {};
       let assetWithdrawalTotal = 0;
       let actualLaborIncome = 0;
       let reachedFI = false;
@@ -659,12 +701,15 @@ function FinancialPlanner() {
             const assetIdx = assetBalances.findIndex(a => a.name === assetName);
             if (assetIdx !== -1) {
               const asset = assetBalances[assetIdx];
-              const tax = amount * (asset.taxRate / 100);
-              capitalGainsTax += tax; // Track as capital gains
-              totalTaxesPaid += tax;
-              assetBalances[assetIdx].balance -= amount;
+              const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+              capitalGainsTax += upd.tax;
+              totalTaxesPaid += upd.tax;
+              assetBalances[assetIdx].balance = upd.newBalance;
+              assetBalances[assetIdx].profit = upd.newProfit;
               withdrawalsByAsset[assetName] = amount;
-              assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+              taxByAsset[assetName] = upd.tax;
+              afterTaxByAsset[assetName] = amount - upd.tax;
+              assetWithdrawalTotal += amount - upd.tax;
             }
           }
         }
@@ -689,12 +734,15 @@ function FinancialPlanner() {
               const assetIdx = assetBalances.findIndex(a => a.name === assetName);
               if (assetIdx !== -1) {
                 const asset = assetBalances[assetIdx];
-                const tax = amount * (asset.taxRate / 100);
-                capitalGainsTax += tax; // Track as capital gains
-                totalTaxesPaid += tax;
-                assetBalances[assetIdx].balance -= amount;
+                const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+                capitalGainsTax += upd.tax;
+                totalTaxesPaid += upd.tax;
+                assetBalances[assetIdx].balance = upd.newBalance;
+                assetBalances[assetIdx].profit = upd.newProfit;
                 withdrawalsByAsset[assetName] = amount;
-                assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+                taxByAsset[assetName] = upd.tax;
+                afterTaxByAsset[assetName] = amount - upd.tax;
+                assetWithdrawalTotal += amount - upd.tax;
               }
             }
           }
@@ -717,12 +765,15 @@ function FinancialPlanner() {
               const assetIdx = assetBalances.findIndex(a => a.name === assetName);
               if (assetIdx !== -1) {
                 const asset = assetBalances[assetIdx];
-                const tax = amount * (asset.taxRate / 100);
-                capitalGainsTax += tax; // Track as capital gains
-                totalTaxesPaid += tax;
-                assetBalances[assetIdx].balance -= amount;
+                const upd = taxOnWithdrawal(asset.balance, asset.profit, asset.taxRate, amount);
+                capitalGainsTax += upd.tax;
+                totalTaxesPaid += upd.tax;
+                assetBalances[assetIdx].balance = upd.newBalance;
+                assetBalances[assetIdx].profit = upd.newProfit;
                 withdrawalsByAsset[assetName] = amount;
-                assetWithdrawalTotal += amount * (1 - asset.taxRate / 100);
+                taxByAsset[assetName] = upd.tax;
+                afterTaxByAsset[assetName] = amount - upd.tax;
+                assetWithdrawalTotal += amount - upd.tax;
               }
             }
           }
@@ -770,11 +821,10 @@ function FinancialPlanner() {
       
       assetBalances.forEach(asset => {
         dataPoint[`${asset.name}_balance`] = Math.round(asset.balance);
-        const grossWithdrawal = withdrawalsByAsset[asset.name] || 0;
-        const afterTaxWithdrawal = grossWithdrawal * (1 - asset.taxRate / 100);
-        const taxPaid = grossWithdrawal * (asset.taxRate / 100);
+        const afterTaxWithdrawal = afterTaxByAsset[asset.name] || 0;
+        const taxPaid = taxByAsset[asset.name] || 0;
         dataPoint[`${asset.name}_withdrawal`] = Math.round(afterTaxWithdrawal);
-        dataPoint[`${asset.name}_tax`] = Math.round(taxPaid); // Store tax per asset
+        dataPoint[`${asset.name}_tax`] = Math.round(taxPaid);
         dataPoint._debugAssetSum += Math.round(afterTaxWithdrawal);
       });
 
@@ -2759,6 +2809,7 @@ function FinancialPlanner() {
     const [local, setLocal] = React.useState({
       name: asset.name,
       balance: String(asset.balance),
+      profit: String(asset.profit),
       annualReturn: String(asset.annualReturn),
       taxRate: String(asset.taxRate),
       withdrawalAge: asset.withdrawalAge === 999 ? '' : String(asset.withdrawalAge),
@@ -2770,12 +2821,13 @@ function FinancialPlanner() {
       setLocal({
         name: asset.name,
         balance: String(asset.balance),
+        profit: String(asset.profit),
         annualReturn: String(asset.annualReturn),
         taxRate: String(asset.taxRate),
         withdrawalAge: asset.withdrawalAge === 999 ? '' : String(asset.withdrawalAge),
         withdrawLimit: asset.withdrawLimit === null ? '' : String(asset.withdrawLimit),
       });
-    }, [asset.id]); // only re-sync when the row identity changes (new asset added)
+    }, [asset.id, asset.profit, asset.balance]); // re-sync when identity changes or clamped values are written back
 
     const commit = (field, raw, parser = parseFloat) => {
       const parsed = parser(raw);
@@ -2828,6 +2880,7 @@ function FinancialPlanner() {
         {/* Balance */}
         <div className="col-span-2">
           <input
+            data-testid={`balance-input-${asset.id}`}
             type="text"
             inputMode="numeric"
             value={local.balance}
@@ -2838,8 +2891,22 @@ function FinancialPlanner() {
           />
         </div>
 
-        {/* Annual Return */}
+        {/* Profit */}
         <div className="col-span-2">
+          <input
+            data-testid={`profit-input-${asset.id}`}
+            type="text"
+            inputMode="numeric"
+            value={local.profit}
+            onChange={(e) => setLocal(p => ({ ...p, profit: e.target.value }))}
+            onBlur={() => commit('profit', local.profit)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Annual Return */}
+        <div className="col-span-1">
           <input
             type="text"
             inputMode="decimal"
@@ -2879,7 +2946,7 @@ function FinancialPlanner() {
         </div>
 
         {/* Withdraw Limit */}
-        <div className="col-span-2">
+        <div className="col-span-1">
           <input
             type="text"
             inputMode="decimal"
@@ -2937,10 +3004,11 @@ function FinancialPlanner() {
     <div className="grid grid-cols-12 gap-3 px-3 pb-2 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
       <div className="col-span-2">Name</div>
       <div className="col-span-2 text-right">Balance (₪)</div>
-      <div className="col-span-2 text-right">Return (%)</div>
+      <div className="col-span-2 text-right">Profit (₪)</div>
+      <div className="col-span-1 text-right">Return (%)</div>
       <div className="col-span-1 text-right">Tax (%)</div>
       <div className="col-span-1 text-right">Min Age</div>
-      <div className="col-span-2 text-center">Withdraw Limit (%)</div>
+      <div className="col-span-1 text-center">Withdraw Limit (%)</div>
       <div className="col-span-1 text-center">Access</div>
       <div className="col-span-1"></div>
     </div>
